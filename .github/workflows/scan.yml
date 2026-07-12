@@ -1,0 +1,194 @@
+name: scan
+run-name: vetlock scan · ${{ inputs.scan_id }}
+
+# Runs vetlock v0.3.0 against a lockfile pair supplied by the site at
+# https://oj-uday.github.io. The `scan_id` is opaque; the Cloudflare Worker
+# generates it and polls the results/ directory of this repo until <scan_id>.json
+# appears. See README.md for the full flow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      scan_id:
+        description: "Opaque scan id (16 hex chars). Used as results/<scan_id>.json"
+        required: true
+        type: string
+      before_b64_gz:
+        description: "gzip(base64(package-lock.before.json))"
+        required: true
+        type: string
+      after_b64_gz:
+        description: "gzip(base64(package-lock.after.json))"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  # Serialise per-scan-id (defensive; the worker only dispatches once per id anyway).
+  group: scan-${{ inputs.scan_id }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Validate inputs
+        env:
+          SCAN_ID: ${{ inputs.scan_id }}
+        run: |
+          set -e
+          if ! [[ "$SCAN_ID" =~ ^[a-f0-9]{16,32}$ ]]; then
+            echo "invalid scan_id shape: $SCAN_ID" >&2
+            exit 1
+          fi
+
+      - name: Checkout this repo (for writing results back)
+        uses: actions/checkout@v4
+        with:
+          path: web-scans
+
+      - name: Checkout vetlock @ v0.3.0
+        uses: actions/checkout@v4
+        with:
+          repository: OJ-Uday/vetlock
+          ref: v0.3.0
+          path: vetlock
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Decode lockfiles
+        env:
+          BEFORE_B64_GZ: ${{ inputs.before_b64_gz }}
+          AFTER_B64_GZ: ${{ inputs.after_b64_gz }}
+        run: |
+          set -e
+          echo "$BEFORE_B64_GZ" | base64 -d | gunzip > before.json
+          echo "$AFTER_B64_GZ" | base64 -d | gunzip > after.json
+          echo "before: $(wc -c < before.json) bytes"
+          echo "after:  $(wc -c < after.json) bytes"
+          # Sanity: reject anything over 2MB decoded (worker caps at 500KB × 2)
+          [ "$(wc -c < before.json)" -lt 2097152 ] || { echo "before decoded too large"; exit 1; }
+          [ "$(wc -c < after.json)" -lt 2097152 ]  || { echo "after decoded too large";  exit 1; }
+
+      - name: Install + build vetlock
+        working-directory: vetlock
+        run: |
+          set -e
+          pnpm install --frozen-lockfile
+          pnpm -r build
+
+      - name: Run vetlock diff → JSON
+        id: run
+        run: |
+          set +e
+          node vetlock/packages/cli/dist/cli.js diff before.json after.json --json > result.json 2> vetlock.err
+          EXIT=$?
+          set -e
+          echo "vetlock exit: $EXIT"
+          echo "exit-code=$EXIT" >> "$GITHUB_OUTPUT"
+          if [ ! -s result.json ]; then
+            echo "vetlock produced no JSON output; wrapping error"
+            node -e "console.log(JSON.stringify({
+              vetlockVersion: '0.3.0',
+              verdict: 'BLOCK',
+              findings: [{
+                detector: 'analysis.failed',
+                category: 'META',
+                package: '(scan)',
+                from: null,
+                to: null,
+                direction: 'added',
+                severity: 'BLOCK',
+                confidence: 'high',
+                message: 'vetlock returned no JSON output',
+                evidence: [{ file: 'stderr.txt', line: 1, snippet: require('fs').readFileSync('vetlock.err', 'utf8').slice(0, 240) || 'no stderr' }],
+                provenance: []
+              }],
+              changedPackages: 0,
+              durationMs: 0
+            }))" > result.json
+          fi
+          # Sanity: JSON must parse
+          node -e "JSON.parse(require('fs').readFileSync('result.json', 'utf8'))" || {
+            echo "vetlock output was not valid JSON, wrapping"
+            node -e "console.log(JSON.stringify({
+              vetlockVersion: '0.3.0',
+              verdict: 'BLOCK',
+              findings: [{
+                detector: 'analysis.failed', category: 'META', package: '(scan)',
+                from: null, to: null, direction: 'added',
+                severity: 'BLOCK', confidence: 'high',
+                message: 'vetlock output was not valid JSON',
+                evidence: [{ file: 'stdout.txt', line: 1, snippet: require('fs').readFileSync('result.json', 'utf8').slice(0, 240) }],
+                provenance: []
+              }],
+              changedPackages: 0,
+              durationMs: 0
+            }))" > result.json
+          }
+
+      - name: Commit result back to results/<scan_id>.json
+        working-directory: web-scans
+        env:
+          SCAN_ID: ${{ inputs.scan_id }}
+        run: |
+          set -e
+          git config user.name "vetlock-scan[bot]"
+          git config user.email "vetlock-scan[bot]@users.noreply.github.com"
+          mkdir -p results
+          cp ../result.json "results/${SCAN_ID}.json"
+          git add "results/${SCAN_ID}.json"
+          git commit -m "scan: ${SCAN_ID}" -q || { echo "nothing to commit"; exit 0; }
+          # Retry loop on push in case of concurrent scans racing on main
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main || true
+            if git push origin main; then
+              echo "pushed on attempt $i"
+              break
+            fi
+            echo "push attempt $i failed, sleeping"
+            sleep $((i * 2))
+          done
+
+      - name: Write error result on failure
+        if: failure()
+        working-directory: web-scans
+        env:
+          SCAN_ID: ${{ inputs.scan_id }}
+        run: |
+          set -e
+          git config user.name "vetlock-scan[bot]"
+          git config user.email "vetlock-scan[bot]@users.noreply.github.com"
+          mkdir -p results
+          node -e "console.log(JSON.stringify({
+            vetlockVersion: '0.3.0',
+            verdict: 'BLOCK',
+            findings: [{
+              detector: 'workflow.failed', category: 'META', package: '(scan)',
+              from: null, to: null, direction: 'added',
+              severity: 'BLOCK', confidence: 'high',
+              message: 'The scan workflow failed before vetlock could complete. Try again or run npx vetlock diff locally.',
+              evidence: [{ file: 'workflow', line: 1, snippet: 'see actions log for run ${{ github.run_id }}' }],
+              provenance: []
+            }],
+            changedPackages: 0,
+            durationMs: 0
+          }))" > "results/${SCAN_ID}.json"
+          git add "results/${SCAN_ID}.json"
+          git commit -m "scan: ${SCAN_ID} (workflow failed)" -q || true
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin main || true
+            git push origin main && break
+            sleep 2
+          done

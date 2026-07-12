@@ -1,0 +1,43 @@
+name: probe-versions
+run-name: probe versions
+
+# One-off helper: dispatches with a package + version pair and outputs the real
+# npm integrity hash so we can bake correct integrity into the site's example
+# lockfiles. Not meant for production; safe to keep around for future needs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'comma-separated pkg@ver list, e.g. "event-stream@3.3.4,event-stream@3.3.6"'
+        required: true
+        default: 'event-stream@3.3.4,event-stream@3.3.6,debug@4.3.4,debug@4.3.5'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch integrity for each pkg@ver
+        env:
+          PKGS: ${{ inputs.packages }}
+        run: |
+          set -e
+          IFS=',' read -ra ARR <<< "$PKGS"
+          for pv in "${ARR[@]}"; do
+            pv="${pv// /}"
+            # split on last '@'
+            pkg="${pv%@*}"
+            ver="${pv##*@}"
+            # URL-encode scoped names
+            enc_pkg=$(echo "$pkg" | sed 's|/|%2F|g')
+            url="https://registry.npmjs.org/${enc_pkg}/${ver}"
+            echo "--- $pkg @ $ver ---"
+            curl -sf "$url" | node -e "
+              const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+              console.log('  name:', d.name);
+              console.log('  version:', d.version);
+              console.log('  dist.integrity:', d.dist && d.dist.integrity);
+              console.log('  dist.tarball:', d.dist && d.dist.tarball);
+              console.log('  scripts:', JSON.stringify(d.scripts || {}));
+            " || echo "  (fetch failed)"
+          done

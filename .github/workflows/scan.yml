@@ -15,12 +15,19 @@ on:
         type: string
       before_b64_gz:
         description: "gzip(base64(package-lock.before.json))"
-        required: true
+        required: false
         type: string
+        default: ""
       after_b64_gz:
         description: "gzip(base64(package-lock.after.json))"
-        required: true
+        required: false
         type: string
+        default: ""
+      corpus_id:
+        description: "Alternative to before/after: name of a bundled vetlock corpus fixture (e.g. shai-hulud-2025). When set, before/after inputs are ignored and the corpus fixture is used."
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -67,17 +74,37 @@ jobs:
         with:
           version: 9
 
-      - name: Decode lockfiles
+      - name: Decode lockfiles or load corpus fixture
         env:
           BEFORE_B64_GZ: ${{ inputs.before_b64_gz }}
           AFTER_B64_GZ: ${{ inputs.after_b64_gz }}
+          CORPUS_ID: ${{ inputs.corpus_id }}
         run: |
           set -e
-          echo "$BEFORE_B64_GZ" | base64 -d | gunzip > before.json
-          echo "$AFTER_B64_GZ" | base64 -d | gunzip > after.json
+          if [ -n "$CORPUS_ID" ]; then
+            # Sanity — only accept known corpus fixtures (safe: exists on disk in checkout)
+            if [[ ! "$CORPUS_ID" =~ ^[a-z0-9-]+$ ]]; then
+              echo "invalid corpus_id shape: $CORPUS_ID" >&2
+              exit 1
+            fi
+            if [ ! -f "vetlock/corpus/${CORPUS_ID}/lockfile.before.json" ]; then
+              echo "no such corpus fixture: $CORPUS_ID" >&2
+              exit 1
+            fi
+            echo "using corpus fixture $CORPUS_ID (self-contained, no npm fetch needed)"
+            cp "vetlock/corpus/${CORPUS_ID}/lockfile.before.json" before.json
+            cp "vetlock/corpus/${CORPUS_ID}/lockfile.after.json" after.json
+            echo "CORPUS_FIXTURE_DIR=vetlock/corpus/${CORPUS_ID}" >> "$GITHUB_ENV"
+          else
+            if [ -z "$BEFORE_B64_GZ" ] || [ -z "$AFTER_B64_GZ" ]; then
+              echo "must supply either corpus_id OR (before_b64_gz + after_b64_gz)" >&2
+              exit 1
+            fi
+            echo "$BEFORE_B64_GZ" | base64 -d | gunzip > before.json
+            echo "$AFTER_B64_GZ"  | base64 -d | gunzip > after.json
+          fi
           echo "before: $(wc -c < before.json) bytes"
           echo "after:  $(wc -c < after.json) bytes"
-          # Sanity: reject anything over 2MB decoded (worker caps at 500KB × 2)
           [ "$(wc -c < before.json)" -lt 2097152 ] || { echo "before decoded too large"; exit 1; }
           [ "$(wc -c < after.json)" -lt 2097152 ]  || { echo "after decoded too large";  exit 1; }
 
@@ -92,8 +119,20 @@ jobs:
         id: run
         run: |
           set +e
-          node vetlock/packages/cli/dist/cli.js diff before.json after.json --json > result.json 2> vetlock.err
-          EXIT=$?
+          # Corpus fixtures use relative file:./ resolved URLs; cd into the fixture
+          # dir so vetlock's fetchOverride can resolve them.
+          if [ -n "$CORPUS_FIXTURE_DIR" ]; then
+            cd "$CORPUS_FIXTURE_DIR"
+            node /home/runner/work/vetlock-web-scans/vetlock-web-scans/vetlock/packages/cli/dist/cli.js diff \
+              lockfile.before.json lockfile.after.json --json \
+              > /home/runner/work/vetlock-web-scans/vetlock-web-scans/result.json \
+              2> /home/runner/work/vetlock-web-scans/vetlock-web-scans/vetlock.err
+            EXIT=$?
+            cd -
+          else
+            node vetlock/packages/cli/dist/cli.js diff before.json after.json --json > result.json 2> vetlock.err
+            EXIT=$?
+          fi
           set -e
           echo "vetlock exit: $EXIT"
           echo "exit-code=$EXIT" >> "$GITHUB_OUTPUT"

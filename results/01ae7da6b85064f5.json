@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "verdict": "BLOCK",
+  "findings": [
+    {
+      "detector": "analysis.failed",
+      "category": "META",
+      "package": "chalk",
+      "from": "5.3.0",
+      "to": "5.3.1",
+      "direction": "changed",
+      "severity": "BLOCK",
+      "confidence": "high",
+      "message": "Package 'chalk' could not be analyzed — all findings are absent. Error: No matching version found for chalk@5.3.1.",
+      "evidence": [
+        {
+          "file": "package.json",
+          "line": 1,
+          "snippet": "No matching version found for chalk@5.3.1."
+        }
+      ],
+      "provenance": []
+    }
+  ],
+  "rollupByDirect": {
+    "chalk": {
+      "maxSeverity": "BLOCK",
+      "count": 1
+    }
+  },
+  "changes": [
+    {
+      "kind": "upgraded",
+      "name": "chalk",
+      "nodeKeyOld": "node_modules/chalk",
+      "nodeKeyNew": "node_modules/chalk",
+      "oldVersion": "5.3.0",
+      "newVersion": "5.3.1",
+      "oldIntegrity": "sha512-dLitG79d+GV1Nb/VYcCDFivJeK1hiukt9QjRNVOsUtTy1rR1YJsmpGGTZ3qJos+uw7WmWF4wUwBd9jxjocFC2w==",
+      "newIntegrity": "sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA=="
+    }
+  ],
+  "errors": [
+    {
+      "package": "chalk",
+      "version": "5.3.1",
+      "error": "No matching version found for chalk@5.3.1."
+    }
+  ],
+  "durationMs": 292
+}

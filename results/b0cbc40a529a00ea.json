@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "verdict": "BLOCK",
+  "findings": [
+    {
+      "detector": "analysis.failed",
+      "category": "META",
+      "package": "ua-parser-js",
+      "from": "0.7.28",
+      "to": "0.7.29",
+      "direction": "changed",
+      "severity": "BLOCK",
+      "confidence": "high",
+      "message": "Package 'ua-parser-js' could not be analyzed — all findings are absent. Error: No matching version found for ua-parser-js@0.7.29.",
+      "evidence": [
+        {
+          "file": "package.json",
+          "line": 1,
+          "snippet": "No matching version found for ua-parser-js@0.7.29."
+        }
+      ],
+      "provenance": []
+    }
+  ],
+  "rollupByDirect": {
+    "ua-parser-js": {
+      "maxSeverity": "BLOCK",
+      "count": 1
+    }
+  },
+  "changes": [
+    {
+      "kind": "upgraded",
+      "name": "ua-parser-js",
+      "nodeKeyOld": "node_modules/ua-parser-js",
+      "nodeKeyNew": "node_modules/ua-parser-js",
+      "oldVersion": "0.7.28",
+      "newVersion": "0.7.29",
+      "oldIntegrity": "sha512-6Gurc1n//gjp9eQNXjD9O3M/sMwVtN5S8Lv9bvOYBfKfDNiIIhqiyi01vMBO45u4zkDE420w/e0se7Vs+sIg+g==",
+      "newIntegrity": "sha512-gDZtHIloSe2CIhFbFqbcQEqTaXeUPzTvUyDCVCVAJvyDU0IsyOqhtBRToVsIDIapjKzMVw2Nx2eQxfEfhrhaog=="
+    }
+  ],
+  "errors": [
+    {
+      "package": "ua-parser-js",
+      "version": "0.7.29",
+      "error": "No matching version found for ua-parser-js@0.7.29."
+    }
+  ],
+  "durationMs": 360
+}

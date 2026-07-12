@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "verdict": "BLOCK",
+  "findings": [
+    {
+      "detector": "analysis.failed",
+      "category": "META",
+      "package": "debug",
+      "from": "4.3.4",
+      "to": null,
+      "direction": "changed",
+      "severity": "BLOCK",
+      "confidence": "high",
+      "message": "Package 'debug' could not be analyzed — all findings are absent. Error: Integrity checksum failed when using sha512: wanted sha512-PRWFHuSU3eDtQJPvnnY7Jcket1j0t5OuOsFzPPzsekD52Zl8qUfFIPEiswXqIvHWGVHOgX+7G/vCNNhehwxfkQ== but got sha512-PRWFHuSU3eDtQJPvnNY7Jcket1j0t5OuOsFzPPzsekD52Zl8qUfFIPEiswXqIvHWGVHOgX+7G/vCNNhehwxfkQ==.",
+      "evidence": [
+        {
+          "file": "package.json",
+          "line": 1,
+          "snippet": "Integrity checksum failed when using sha512: wanted sha512-PRWFHuSU3eDtQJPvnnY7Jcket1j0t5OuOsFzPPzsekD52Zl8qUfFIPEiswXqIvHWGVHOgX+7G/vCNNhehwxfkQ== but got sha512-PRWFHuSU3eDtQJPvnNY7Jcket1j0t5OuOsFzPPzsekD52Zl8qUfFIPEiswXqIvHWGVHOgX+7G/vCN"
+        }
+      ],
+      "provenance": []
+    },
+    {
+      "detector": "env.token-harvest",
+      "category": "ENV",
+      "package": "debug",
+      "from": null,
+      "to": "4.3.5",
+      "direction": "added",
+      "severity": "BLOCK",
+      "confidence": "high",
+      "message": "Package started reading sensitive env: whole-object process.env enumeration",
+      "evidence": [
+        {
+          "file": "src/node.js",
+          "line": 124,
+          "snippet": "exports.inspectOpts = Object.keys(process.env).filter(key => {"
+        }
+      ],
+      "provenance": [
+        [
+          "my-app",
+          "debug"
+        ]
+      ]
+    },
+    {
+      "detector": "install.script-added",
+      "category": "INSTALL",
+      "package": "debug",
+      "from": null,
+      "to": "4.3.5",
+      "direction": "added",
+      "severity": "BLOCK",
+      "confidence": "high",
+      "message": "Lifecycle script \"test\" was added.",
+      "evidence": [
+        {
+          "file": "package.json",
+          "line": 1,
+          "snippet": "test: npm run test:node && npm run test:browser && npm run lint"
+        }
+      ],
+      "provenance": [
+        [
+          "my-app",
+          "debug"
+        ]
+      ]
+    }
+  ],
+  "rollupByDirect": {
+    "debug": {
+      "maxSeverity": "BLOCK",
+      "count": 3
+    }
+  },
+  "changes": [
+    {
+      "kind": "upgraded",
+      "name": "debug",
+      "nodeKeyOld": "node_modules/debug",
+      "nodeKeyNew": "node_modules/debug",
+      "oldVersion": "4.3.4",
+      "newVersion": "4.3.5",
+      "oldIntegrity": "sha512-PRWFHuSU3eDtQJPvnnY7Jcket1j0t5OuOsFzPPzsekD52Zl8qUfFIPEiswXqIvHWGVHOgX+7G/vCNNhehwxfkQ==",
+      "newIntegrity": "sha512-pt0bNEmneDIvdL1Xsd9oDQ/wrQRkXDT4AUWlNZNPKvW5x/jyO9VFXkJUP07vQ2upmw5PlaITaPKc31jK13V+jg=="
+    }
+  ],
+  "errors": [
+    {
+      "package": "debug",
+      "version": "4.3.4",
+      "error": "Integrity checksum failed when using sha512: wanted sha512-PRWFHuSU3eDtQJPvnnY7Jcket1j0t5OuOsFzPPzsekD52Zl8qUfFIPEiswXqIvHWGVHOgX+7G/vCNNhehwxfkQ== but got sha512-PRWFHuSU3eDtQJPvnNY7Jcket1j0t5OuOsFzPPzsekD52Zl8qUfFIPEiswXqIvHWGVHOgX+7G/vCNNhehwxfkQ==."
+    }
+  ],
+  "durationMs": 238
+}

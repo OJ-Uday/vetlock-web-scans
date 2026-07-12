@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "verdict": "BLOCK",
+  "findings": [
+    {
+      "detector": "analysis.failed",
+      "category": "META",
+      "package": "event-stream",
+      "from": "3.3.4",
+      "to": "3.3.6",
+      "direction": "changed",
+      "severity": "BLOCK",
+      "confidence": "high",
+      "message": "Package 'event-stream' could not be analyzed — all findings are absent. Error: No matching version found for event-stream@3.3.6.",
+      "evidence": [
+        {
+          "file": "package.json",
+          "line": 1,
+          "snippet": "No matching version found for event-stream@3.3.6."
+        }
+      ],
+      "provenance": []
+    }
+  ],
+  "rollupByDirect": {
+    "event-stream": {
+      "maxSeverity": "BLOCK",
+      "count": 1
+    }
+  },
+  "changes": [
+    {
+      "kind": "upgraded",
+      "name": "event-stream",
+      "nodeKeyOld": "node_modules/event-stream",
+      "nodeKeyNew": "node_modules/event-stream",
+      "oldVersion": "3.3.4",
+      "newVersion": "3.3.6",
+      "oldIntegrity": "sha512-QHpkERcGsR0T7Qm3HNJSyXKEEj8AHNxkY3PK8TS2KJvQ7NiSHe3DDpwVKKtoYprL/AreyzFBeIkBIWChAqn60g==",
+      "newIntegrity": "sha512-3zumZUcOsIWlbeXHFELqroYyzVyMLZAiFVSAxG95ZBLzytqIiKS8TDbZzXsWjPMuIRSMwR9OP4V7RyRA5Bt/tw=="
+    }
+  ],
+  "errors": [
+    {
+      "package": "event-stream",
+      "version": "3.3.6",
+      "error": "No matching version found for event-stream@3.3.6."
+    }
+  ],
+  "durationMs": 317
+}

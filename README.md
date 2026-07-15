@@ -72,20 +72,59 @@ MIT.
 
 ## Hosted scan API workflow
 
+Workflow: [`.github/workflows/hosted-scan.yml`](.github/workflows/hosted-scan.yml).
+
 `hosted-scan.yml` runs vetlock against a lockfile pair delivered via
 `repository_dispatch` and reports the verdict straight back over HTTPS —
 no commit to this repo, no polling.
 
-It's triggered by the Cloudflare Worker at
-[`vetlock-app.oj-uday.workers.dev`](https://vetlock-app.oj-uday.workers.dev),
-not manually. The Worker POSTs a `repository_dispatch` event of type
-`hosted-scan` with the two lockfiles base64+gzip-encoded, and the workflow
-POSTs the result to the Worker's `/result-scan` endpoint when it's done
-(success, WARN/BLOCK, or crash — it always reports back).
+It's triggered by a `repository_dispatch` event with `event_type: hosted-scan`,
+sent by the Cloudflare Worker's `POST /scan` endpoint at
+[`vetlock-app.oj-uday.workers.dev/scan`](https://vetlock-app.oj-uday.workers.dev/scan) —
+not manually. The Worker POSTs the two lockfiles base64+gzip-encoded as
+`client_payload`, and the workflow POSTs the result to the Worker's
+`/result-scan` endpoint when it's done (success, WARN/BLOCK, or crash — it
+always reports back).
 
 Repo owner setup: add `VETLOCK_HOSTED_INGEST_SECRET` to this repo's Actions
-secrets (must match the Worker's `RESULT_INGEST_SECRET`) so the workflow can
-authenticate its callback to `/result-scan`.
+secrets (must match the Worker's `HOSTED_SCAN_INGEST_SECRET` — note this is a
+*different* secret from `RESULT_INGEST_SECRET`, which only guards the
+GitHub App webhook path) so the workflow can authenticate its callback to
+`/result-scan`.
 
 Cost: $0/month, same as everything else here — GitHub Actions has no minute
 cap on public repos.
+
+**Verified working 2026-07-15:** end-to-end lifecycle (Worker `POST /scan` →
+`repository_dispatch` → this workflow → `POST /result-scan` callback)
+succeeds. It currently returns a `"failed"` verdict because `vetlock@latest`
+isn't published to npm yet (`npx vetlock@latest` has nothing to install) —
+this workflow will start returning real verdicts once P3 npm-publish
+completes on the `vetlock` repo.
+
+### Runbook: manually redeliver a failed dispatch
+
+`hosted-scan.yml`'s only trigger is `repository_dispatch` — it has no
+`workflow_dispatch` block, so plain `gh workflow run hosted-scan.yml` will
+be rejected with "workflow does not have a workflow_dispatch trigger". To
+redeliver a dispatch by hand for debugging, hit the same `dispatches` API
+endpoint the Worker uses, via `gh api`:
+
+```bash
+gh api repos/OJ-Uday/vetlock-web-scans/dispatches \
+  -f event_type=hosted-scan \
+  -f 'client_payload[scan_id]=debug-manual-test' \
+  -f 'client_payload[lockfile_before_b64]=<base64+gzip of before lockfile>' \
+  -f 'client_payload[lockfile_after_b64]=<base64+gzip of after lockfile>'
+```
+
+Then watch the run and check the callback landed:
+
+```bash
+gh run list --repo OJ-Uday/vetlock-web-scans --workflow=hosted-scan.yml --limit 5
+gh run watch --repo OJ-Uday/vetlock-web-scans <run-id>
+```
+
+The result never gets committed to this repo (that's the point of this
+workflow) — confirm success by checking the Worker's `/scan/:id` endpoint
+for the `scan_id` you used, or by tailing the Worker with `wrangler tail`.

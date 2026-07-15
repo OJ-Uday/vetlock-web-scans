@@ -69,3 +69,23 @@ in the portfolio repo.
 ## License
 
 MIT.
+
+## Hosted scan API workflow
+
+`hosted-scan.yml` runs vetlock against a lockfile pair delivered via
+`repository_dispatch` and reports the verdict straight back over HTTPS —
+no commit to this repo, no polling.
+
+It's triggered by the Cloudflare Worker at
+[`vetlock-app.oj-uday.workers.dev`](https://vetlock-app.oj-uday.workers.dev),
+not manually. The Worker POSTs a `repository_dispatch` event of type
+`hosted-scan` with the two lockfiles base64+gzip-encoded, and the workflow
+POSTs the result to the Worker's `/result-scan` endpoint when it's done
+(success, WARN/BLOCK, or crash — it always reports back).
+
+Repo owner setup: add `VETLOCK_HOSTED_INGEST_SECRET` to this repo's Actions
+secrets (must match the Worker's `RESULT_INGEST_SECRET`) so the workflow can
+authenticate its callback to `/result-scan`.
+
+Cost: $0/month, same as everything else here — GitHub Actions has no minute
+cap on public repos.

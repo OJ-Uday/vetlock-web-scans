@@ -1,0 +1,118 @@
+name: hosted-scan
+run-name: vetlock hosted scan · ${{ github.event.client_payload.scan_id }}
+
+# Runs vetlock against a lockfile pair dispatched by the Cloudflare Worker at
+# https://vetlock-app.oj-uday.workers.dev (the hosted-scan API surface, "shape
+# B" of P5-lite). Unlike scan.yml, this workflow never writes to this repo —
+# it reports the result straight back to the Worker over HTTPS via
+# POST /result-scan. See README.md "Hosted scan API workflow" for the flow.
+
+on:
+  repository_dispatch:
+    types: [hosted-scan]
+
+permissions:
+  contents: read # for @vetlock/vetlock npm package fetch via npx
+  # No other permissions — this workflow only reads and reports back over HTTPS.
+
+concurrency:
+  # Keyed per scan_id so a retry of the same scan can't race itself, while
+  # unrelated scans (different scan_id) run fully in parallel.
+  group: hosted-scan-${{ github.event.client_payload.scan_id }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate client_payload
+        env:
+          SCAN_ID: ${{ github.event.client_payload.scan_id }}
+        run: |
+          set -e
+          if ! [[ "$SCAN_ID" =~ ^[a-f0-9]{16,32}$ ]]; then
+            echo "invalid scan_id shape: $SCAN_ID" >&2
+            exit 1
+          fi
+          echo "SCAN_ID=$SCAN_ID" >> "$GITHUB_ENV"
+          echo "ECOSYSTEM=${{ github.event.client_payload.ecosystem || 'npm' }}" >> "$GITHUB_ENV"
+          echo "SCAN_START_MS=$(date +%s%3N)" >> "$GITHUB_ENV"
+
+      - name: Decode + decompress lockfiles
+        env:
+          LOCKFILE_BEFORE_B64: ${{ github.event.client_payload.lockfile_before_b64 }}
+          LOCKFILE_AFTER_B64: ${{ github.event.client_payload.lockfile_after_b64 }}
+        run: |
+          set -e
+          if [ -z "$LOCKFILE_BEFORE_B64" ] || [ -z "$LOCKFILE_AFTER_B64" ]; then
+            echo "missing lockfile_before_b64 / lockfile_after_b64 in client_payload" >&2
+            exit 1
+          fi
+          echo "$LOCKFILE_BEFORE_B64" | base64 -d | gunzip > /tmp/before.lock
+          echo "$LOCKFILE_AFTER_B64" | base64 -d | gunzip > /tmp/after.lock
+          echo "before: $(wc -c < /tmp/before.lock) bytes"
+          echo "after:  $(wc -c < /tmp/after.lock) bytes"
+          [ "$(wc -c < /tmp/before.lock)" -lt 2097152 ] || { echo "before decoded too large"; exit 1; }
+          [ "$(wc -c < /tmp/after.lock)" -lt 2097152 ]  || { echo "after decoded too large";  exit 1; }
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run vetlock diff → JSON
+        run: |
+          set +e
+          if [ "$ECOSYSTEM" = "pypi" ]; then
+            npx --yes vetlock@latest diff /tmp/before.lock /tmp/after.lock --json \
+              --old-lockfile-path=/tmp/before.requirements.txt \
+              --new-lockfile-path=/tmp/after.requirements.txt \
+              > /tmp/result.json || true
+          else
+            npx --yes vetlock@latest diff /tmp/before.lock /tmp/after.lock --json > /tmp/result.json || true
+          fi
+          set -e
+          echo "vetlock wrote $( [ -s /tmp/result.json ] && wc -c < /tmp/result.json || echo 0 ) bytes to result.json"
+
+      - name: Extract verdict + findings
+        id: extract
+        run: |
+          set -e
+          if [ -s /tmp/result.json ] && jq -e . /tmp/result.json > /dev/null 2>&1; then
+            jq -r '.verdict // "UNKNOWN"' /tmp/result.json > /tmp/verdict.txt
+            jq -c '.findings // []' /tmp/result.json > /tmp/findings.json
+            echo "has_result=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "vetlock crashed before writing valid JSON"
+            echo "has_result=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report result to Worker
+        if: always()
+        env:
+          INGEST_SECRET: ${{ secrets.VETLOCK_HOSTED_INGEST_SECRET }}
+        run: |
+          set -e
+          END_MS=$(date +%s%3N)
+          ELAPSED_MS=$((END_MS - SCAN_START_MS))
+
+          if [ "${{ steps.extract.outputs.has_result }}" = "true" ]; then
+            VERDICT=$(cat /tmp/verdict.txt)
+            BODY=$(jq -n \
+              --arg scan_id "$SCAN_ID" \
+              --arg verdict "$VERDICT" \
+              --argjson findings "$(cat /tmp/findings.json)" \
+              --argjson elapsed_ms "$ELAPSED_MS" \
+              '{scan_id: $scan_id, verdict: $verdict, findings: $findings, elapsed_ms: $elapsed_ms}')
+          else
+            BODY=$(jq -n \
+              --arg scan_id "$SCAN_ID" \
+              --argjson elapsed_ms "$ELAPSED_MS" \
+              '{scan_id: $scan_id, verdict: "FAILED", error: "vetlock crashed", elapsed_ms: $elapsed_ms}')
+          fi
+
+          curl -sS -X POST https://vetlock-app.oj-uday.workers.dev/result-scan \
+            -H "content-type: application/json" \
+            -H "x-vetlock-hosted-ingest-secret: $INGEST_SECRET" \
+            -d "$BODY"

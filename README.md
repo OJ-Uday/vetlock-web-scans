@@ -56,7 +56,7 @@ node packages/cli/dist/cli.js diff /path/to/before.json /path/to/after.json --js
 Or, faster:
 
 ```bash
-npx vetlock@0.3.0 diff before.json after.json --json
+npx @oj-uday/vetlock@0.8.0 diff before.json after.json --json
 ```
 
 ## Setup (repo owner only)
@@ -97,8 +97,8 @@ cap on public repos.
 
 **Verified working 2026-07-15:** end-to-end lifecycle (Worker `POST /scan` →
 `repository_dispatch` → this workflow → `POST /result-scan` callback)
-succeeds. It currently returns a `"failed"` verdict because `vetlock@latest`
-isn't published to npm yet (`npx vetlock@latest` has nothing to install) —
+succeeds. It currently returns a `"failed"` verdict because `@oj-uday/vetlock@latest`
+isn't published to npm yet (`npx @oj-uday/vetlock@latest` has nothing to install) —
 this workflow will start returning real verdicts once P3 npm-publish
 completes on the `vetlock` repo.
 

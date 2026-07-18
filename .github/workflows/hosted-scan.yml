@@ -12,7 +12,7 @@ on:
     types: [hosted-scan]
 
 permissions:
-  contents: read # for @vetlock/vetlock npm package fetch via npx
+  contents: read # for @oj-uday/vetlock npm package fetch via npx
   # No other permissions — this workflow only reads and reports back over HTTPS.
 
 concurrency:
@@ -70,12 +70,12 @@ jobs:
         run: |
           set +e
           if [ "$ECOSYSTEM" = "pypi" ]; then
-            npx --yes vetlock@latest diff /tmp/before.lock /tmp/after.lock --json \
+            npx --yes @oj-uday/vetlock@latest diff /tmp/before.lock /tmp/after.lock --json \
               --old-lockfile-path=/tmp/before.requirements.txt \
               --new-lockfile-path=/tmp/after.requirements.txt \
               > /tmp/result.json || true
           else
-            npx --yes vetlock@latest diff /tmp/before.lock /tmp/after.lock --json > /tmp/result.json || true
+            npx --yes @oj-uday/vetlock@latest diff /tmp/before.lock /tmp/after.lock --json > /tmp/result.json || true
           fi
           set -e
           echo "vetlock wrote $( [ -s /tmp/result.json ] && wc -c < /tmp/result.json || echo 0 ) bytes to result.json"

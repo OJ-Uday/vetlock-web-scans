@@ -3,9 +3,9 @@
 Repo-specific follow-ups. See `hosted-scan.yml`'s README section for the
 current end-to-end status of the hosted-scan API path.
 
-- [ ] Wait for `vetlock@0.7.0` npm publish (tracked as the P0 item in
+- [ ] Wait for `@oj-uday/vetlock@0.8.0` npm publish (tracked as the P0 item in
       `vetlock/TODO.md`). Until it lands, `hosted-scan.yml`'s
-      `npx vetlock@latest` step 404s and every hosted scan reports back
+      `npx @oj-uday/vetlock@latest` step 404s and every hosted scan reports back
       verdict `"failed"` — the workflow itself is correct, it just has
       nothing to `npx`.
 - [ ] Add a schedule trigger to `cleanup.yml` for the `results/` dir — old
